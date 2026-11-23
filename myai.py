@@ -31,7 +31,7 @@ question = st.text_input("اكتب سؤالك حول الكتاب هنا:", key=
 if question and extracted_texts:
     context = "\n".join(extracted_texts.values())
     
-    client = Groq(api_key=GROQ_API_KEY)
+    client = Groq(api_key=st.secrets["GROQ_API_KEY"])
     
     with st.spinner("🔍 جاري البحث في الكتاب وصياغة الإجابة..."):
         chat_completion = client.chat.completions.create(
