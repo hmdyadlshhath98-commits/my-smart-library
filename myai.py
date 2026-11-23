@@ -1,96 +1,92 @@
 import os
 import streamlit as st
-from google import genai
+from groq import Groq
+from pypdf import PdfReader
 
-# إعدادات وتصميم الصفحة
+# إعدادات الصفحة
 st.set_page_config(page_title="مكتبي الذكية للكتب", layout="centered")
 
-st.title("📚 مكتبي الذكية للكتب")
-st.write("ارفع ملف الـ PDF وتحدث معه بسياق متصل (Chat History).")
+st.title("📚 مكتبي الذكية للكتب (محادثة مستمرة)")
+st.write("ارفع ملف الـ PDF وتحدث معه بسياق متصل مثل ChatGPT تماماً.")
 
-# ضبط مفتاح الـ API (تأكد من وضعه في متغيرات البيئة أو استبداله هنا)
-# os.environ["GEMINI_API_KEY"] = "YOUR_API_KEY"
+# وضع مفتاح الـ API الخاص بـ Groq (يمكنك وضعه هنا مباشرة أو في متغيرات البيئة)
+# os.environ["GROQ_API_KEY"] = "YOUR_GROQ_API_KEY"
 
-# 1. صندوق رفع الملفات (PDF)
+# صندوق رفع الملفات
 uploaded_file = st.file_uploader("Upload", type=["pdf"])
 
 if uploaded_file is not None:
-    st.success(f"تم رفع الملف بنجاح: {uploaded_file.name}")
-    
-    # حفظ الملف مؤقتاً لرفعه لنموذج جيميناي
-    temp_file_path = f"temp_{uploaded_file.name}"
-    with open(temp_file_path, "wb") as f:
-        f.write(uploaded_file.getbuffer())
-        
-    try:
-        # تهيئة عميل جيميناي
-        client = genai.Client()
-        
-        # رفع الملف مرة واحدة وحفظه في الذاكرة المؤقتة للجلسة
-        if "gemini_file" not in st.session_state or st.session_state.get("file_name") != uploaded_file.name:
-            with st.spinner("جاري معالجة الملف ورفعه..."):
-                uploaded_doc = client.files.upload(file=temp_file_path)
-                st.session_state.gemini_file = uploaded_doc
-                st.session_state.file_name = uploaded_file.name
-                # إعادة ضبط سجل الدردشة عند تغيير الملف
-                st.session_state.messages = []
-            st.success("تمت معالجة الكتاب وجاهز للدردشة المستمرة!")
+    # التحقق من تغيير الملف لإعادة ضبط المحادثة
+    if "current_file_name" not in st.session_state or st.session_state.current_file_name != uploaded_file.name:
+        st.session_state.current_file_name = uploaded_file.name
+        st.session_state.messages = []
+        st.session_state.pdf_text_content = ""
 
-        # تهيئة قائمة الرسائل في الـ Session State لو لم تكن موجودة
-        if "messages" not in st.session_state:
-            st.session_state.messages = []
+    # استخراج نص الـ PDF إذا لم يكن مستخرجاً مسبقاً لهذه الجلسة
+    if not st.session_state.pdf_text_content:
+        with st.spinner("جاري قراءة وتحليل ملف الـ PDF..."):
+            try:
+                reader = PdfReader(uploaded_file)
+                extracted_text = ""
+                for page in reader.pages:
+                    page_text = page.extract_text()
+                    if page_text:
+                        extracted_text += page_text + "\n"
+                
+                st.session_state.pdf_text_content = extracted_text
+                
+                # رسالة النظام الأولى لتوجيه النموذج بالاعتماد على الكتاب
+                st.session_state.messages.append({
+                    "role": "system", 
+                    "content": f"أنت مساعد ذكي ومحترف تجيب حصرياً بناءً على محتوى الكتاب التالي:\n\n{st.session_state.pdf_text_content[:20000]}"
+                })
+                st.success("تم رفع الملف وتحليله بنجاح! يمكنك البدء بالأسئلة الآن.")
+            except Exception as e:
+                st.error(f"حدث خطأ أثناء قراءة الملف: {e}")
 
-        st.markdown("---")
-        st.subheader("💬 الدردشة مع الكتاب:")
+    st.markdown("---")
+    st.subheader("💬 نافذة المحادثة:")
 
-        # عرض سجل المحادثات السابق على الشاشة
-        for message in st.session_state.messages:
+    # عرض سجل المحادثات السابق (تخطي رسالة النظام System Prompt)
+    for message in st.session_state.messages:
+        if message["role"] != "system":
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
-        # خانة إدخال الرسائل الخاصة بـ Streamlit (تظهر أسفل الشاشة وتدعم Enter مباشرة)
-        if user_prompt := st.chat_input("اكتب سؤالك أو طلبك عن الكتاب..."):
-            
-            # 1. عرض وتخزين رسالة المستخدم
-            st.session_state.messages.append({"role": "user", "content": user_prompt})
-            with st.chat_message("user"):
-                st.markdown(user_prompt)
-
-            # 2. توليد الرد من النموذج مع تضمين الملف وسياق المحادثة
-            with st.chat_message("assistant"):
-                with st.spinner("جاري التفكير..."):
-                    try:
-                        # بناء المحتوى ليتضمن الملف المرفوع وسجل الدردشة السابق مع السؤال الجديد
-                        # نمرر الملف المرفوع في أول طلب أو مع كل رسالة لضمان معرفة النموذج له
-                        chat_contents = [st.session_state.gemini_file]
-                        
-                        # إضافة الرسائل السابقة كسياق
-                        for msg in st.session_state.messages[:-1]:
-                            chat_contents.append(f"{msg['role']}: {msg['content']}")
-                            
-                        # إضافة السؤال الحالي
-                        chat_contents.append(f"user: {user_prompt}")
-
-                        response = client.models.generate_content(
-                            model='gemini-2.5-flash',
-                            contents=chat_contents
-                        )
-                        
-                        bot_reply = response.text
-                        st.markdown(bot_reply)
-                        
-                        # تخزين رد المساعد في سجل المحادثات
-                        st.session_state.messages.append({"role": "assistant", "content": bot_reply})
-                        
-                    except Exception as err:
-                        st.error(f"حدث خطأ أثناء توليد الرد: {err}")
-                
-    except Exception as e:
-        st.error(f"حدث خطأ: {e}")
+    # خانة إدخال الرسائل والمحادثة التفاعلية من الأسفل
+    if user_prompt := st.chat_input("اكتب سؤالك أو اطلب شرح جزء معين من الكتاب..."):
         
-    # حذف الملف المؤقت من الجهاز المحلي
-    if os.path.exists(temp_file_path):
-        os.remove(temp_file_path)
-        
+        # 1. إضافة وتخزين رسالة المستخدم وعرضها
+        st.session_state.messages.append({"role": "user", "content": user_prompt})
+        with st.chat_message("user"):
+            st.markdown(user_prompt)
+
+        # 2. توليد الرد من خلال Groq مع الحفاظ على سياق المحادثة الكامل
+        with st.chat_message("assistant"):
+            with st.spinner("جاري التفكير وصياغة الرد..."):
+                try:
+                    client = Groq()
+                    completion = client.chat.completions.create(
+                        model="llama-3.3-70b-versatile",
+                        messages=st.session_state.messages,
+                        temperature=0.7,
+                        max_tokens=1500,
+                    )
+                    
+                    bot_reply = completion.choices[0].message.content
+                    st.markdown(bot_reply)
+                    
+                    # 3. تخزين رد المساعد في سجل المحادثات لضمان استمرار السياق
+                    st.session_state.messages.append({"role": "assistant", "content": bot_reply})
+                    
+                except Exception as err:
+                    st.error(f"حدث خطأ أثناء الاتصال بالخادم: {err}")
+
 else:
-    st.info("الرجاء رفع ملف PDF للبدء في الدردشة المستمرة.")
+    # في حال لم يتم رفع ملف
+    st.info("الرجاء رفع ملف PDF من بالأعلى للبدء في الدردشة.")
+    # مسح الذاكرة عند عدم وجود ملف
+    if "messages" in st.session_state:
+        st.session_state.messages = []
+    if "pdf_text_content" in st.session_state:
+        st.session_state.pdf_text_content = ""
