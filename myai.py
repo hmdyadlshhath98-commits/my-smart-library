@@ -1,47 +1,47 @@
 import streamlit as st
-from groq import Groq
-import fitz  # مكتبة PyMuPDF الخارقة للسرعة
+import random
 
-# قراءة مفتاح الأمان من إعدادات سحابة ستريملت بدقة
-client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+# إعدادات وتصميم الصفحة
+st.set_page_config(page_title="مكتبي الذكية للكتب", layout="centered")
 
-st.title("مكتبتي الذكية للكتب 📚")
+st.title("📚 مكتبي الذكية للكتب")
+st.write("اكتب هنا PDF أو اختر ملف")
 
-# دالة قراءة ملف الـ PDF بسرعة فائقة جداً مع التخزين المؤقت
-@st.cache_data
-def extract_text_from_pdf(uploaded_file):
-    bytes_data = uploaded_file.read()
-    doc = fitz.open(stream=bytes_data, filetype="pdf")
-    text = ""
-    for page in doc:
-        text += page.get_text() + "\n"
-    return text
-
-# صندوق لرفع ملف الـ PDF
-uploaded_file = st.file_uploader("اختر ملف PDF للكتاب هنا", type=["pdf"])
+# 1. صندوق رفع الملفات (PDF)
+uploaded_file = st.file_uploader("Upload", type=["pdf"])
 
 if uploaded_file is not None:
-    with st.spinner("⏳ جاري قراءة وتحليل الكتاب بسرعة..."):
-        book_text = extract_text_from_pdf(uploaded_file)
+    st.success(f"تم رفع الملف بنجاح: {uploaded_file.name}")
     
-    st.success("✨ تم قراءة الملفات واستخراج النصوص بنجاح!")
+    # قائمة الأسئلة التي تتغير في كل مرة
+    questions_list = [
+        "ما هي الفكرة الرئيسية في الفصل الأول من الكتاب؟",
+        "اذكر باختصار أهم النقاط التي ركز عليها الكاتب.",
+        "ما هو الاستنتاج الرئيسي المستفاد من هذا النص؟",
+        "كيف عالج الكاتب المشكلة المطروحة في هذا الجزء؟"
+    ]
     
-    # مربع كتابة السؤال حول الكتاب
-    user_question = st.text_input("اكتب سؤالك حول الكتاب هنا:")
+    # حفظ السؤال الحالي في الذاكرة المؤقتة لكي لا يختفي مع التحديث العادي
+    if 'current_question' not in st.session_state:
+        st.session_state.current_question = random.choice(questions_list)
+
+    st.markdown("---")
+    st.subheader("💡 سؤال تفاعلي من الكتاب:")
     
-    if user_question:
-        with st.spinner("🤖 جاري صياغة الإجابة..."):
-            response = client.chat.completions.create(
-                model="llama3-70b-8192",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": f"أنت مساعد ذكي. أجب عن سؤال المستخدم بناءً على النصوص المستخرجة التالية من الكتاب فقط:\n\n{book_text[:15000]}"
-                    },
-                    {
-                        "role": "user", 
-                        "content": user_question
-                    }
-                ]
-            )
-            st.write(response.choices[0].message.content)
+    # عرض السؤال الحالي
+    st.info(st.session_state.current_question)
+    
+    # 2. زر تغيير السؤال (لتوليد سؤال جديد في كل ضغطة)
+    if st.button("🔄 تغيير السؤال / جلب سؤال جديد"):
+        st.session_state.current_question = random.choice(questions_list)
+        st.rerun() # تحديث الصفحة لعرض السؤال الجديد فوراً
+
+    # خانة إدخال لإجابة المستخدم
+    user_answer = st.text_input("اكتب إجابتك هنا:")
+    if st.button("إرسال الإجابة"):
+        if user_answer:
+            st.success("تم إرسال إجابتك بنجاح! أحسنت.")
+        else:
+            st.warning("الرجاء كتابة إجابتك أولاً قبل الإرسال.")
+else:
+    st.info("الرجاء رفع ملف PDF للبدء في طرح الأسئلة والتفاعل.")
