@@ -9,8 +9,12 @@ st.set_page_config(page_title="مكتبي الذكية للكتب", layout="cent
 st.title("📚 مكتبي الذكية للكتب (محادثة مستمرة)")
 st.write("ارفع ملف الـ PDF وتحدث معه بسياق متصل مثل ChatGPT تماماً.")
 
-# وضع مفتاح الـ API الخاص بـ Groq (يمكنك وضعه هنا مباشرة أو في متغيرات البيئة)
-# os.environ["GROQ_API_KEY"] = "YOUR_GROQ_API_KEY"
+# سحب مفتاح Groq بسرية تامة من Streamlit Secrets أو متغيرات البيئة
+groq_api_key = st.secrets.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY")
+
+if not groq_api_key:
+    st.error("⚠️ تنبيه: لم يتم العثور على مفتاح Groq API. الرجاء إضافته في إعدادات Secrets الخاصة بـ Streamlit.")
+    st.stop()
 
 # صندوق رفع الملفات
 uploaded_file = st.file_uploader("Upload", type=["pdf"])
@@ -65,9 +69,9 @@ if uploaded_file is not None:
         with st.chat_message("assistant"):
             with st.spinner("جاري التفكير وصياغة الرد..."):
                 try:
-                    client = Groq()
+                    client = Groq(api_key=groq_api_key)
                     completion = client.chat.completions.create(
-                        model="llama-3.3-70b-versatile",
+                        model="llama-3.1-70b-versatile",  # الاسم الصحيح والمعتمد ليعمل بدون أخطاء
                         messages=st.session_state.messages,
                         temperature=0.7,
                         max_tokens=1500,
@@ -85,7 +89,6 @@ if uploaded_file is not None:
 else:
     # في حال لم يتم رفع ملف
     st.info("الرجاء رفع ملف PDF من بالأعلى للبدء في الدردشة.")
-    # مسح الذاكرة عند عدم وجود ملف
     if "messages" in st.session_state:
         st.session_state.messages = []
     if "pdf_text_content" in st.session_state:
