@@ -45,4 +45,16 @@ if question and extracted_texts:
         )
         st.markdown("### 🤖 إجابة المساعد الذكي:")
         st.write(chat_completion.choices[0].message.content)
+import streamlit as st
+from pypdf import PdfReader
 
+# دالة لقراءة واستخراج النصوص من ملفات الـ PDF بسرعة
+@st.cache_data
+def extract_text_from_pdf(uploaded_file):
+    reader = PdfReader(uploaded_file)
+    text = ""
+    for page in reader.pages:
+        page_text = page.extract_text()
+        if page_text:
+            text += page_text + "\n"
+    return text
