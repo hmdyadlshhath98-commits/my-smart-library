@@ -71,7 +71,7 @@ if uploaded_file is not None:
                 try:
                     client = Groq(api_key=groq_api_key)
                     completion = client.chat.completions.create(
-                        model="llama-3.1-70b-versatile",  # الاسم الصحيح والمعتمد ليعمل بدون أخطاء
+                        model="llama-3.3-8b-8192",  # الاسم الصحيح والمعتمد ليعمل بدون أخطاء
                         messages=st.session_state.messages,
                         temperature=0.7,
                         max_tokens=1500,
