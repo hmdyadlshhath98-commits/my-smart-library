@@ -7,7 +7,12 @@ st.set_page_config(page_title="مساعد الكتب الذكي", page_icon="�
 st.title("📚 مساعد الكتب الذكي")
 st.write("قم برفع كتاب بصيغة PDF واسأل الذكاء الاصطناعي عنه مباشرة!")
 
-GROQ_API_KEY = ""
+import os
+from groq import Groq
+import streamlit as st
+
+# قراءة المفتاح بأمان من إعدادات Streamlit
+client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
 pdf_files = st.file_uploader("اختر ملفات الـ PDF", type=["pdf"], accept_multiple_files=True)
 
@@ -40,9 +45,4 @@ if question and extracted_texts:
         )
         st.markdown("### 🤖 إجابة المساعد الذكي:")
         st.write(chat_completion.choices[0].message.content)
-        import os
-from groq import Groq
-import streamlit as st
 
-# قراءة المفتاح بأمان من إعدادات Streamlit
-client = Groq(api_key=st.secrets["GROQ_API_KEY"])
