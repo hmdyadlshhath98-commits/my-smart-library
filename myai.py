@@ -1,60 +1,47 @@
 import streamlit as st
-from pypdf import PdfReader
 from groq import Groq
+import fitz  # مكتبة PyMuPDF الخارقة للسرعة
 
-st.set_page_config(page_title="مساعد الكتب الذكي", page_icon="📚", layout="centered")
-
-st.title("📚 مساعد الكتب الذكي")
-st.write("قم برفع كتاب بصيغة PDF واسأل الذكاء الاصطناعي عنه مباشرة!")
-
-import os
-from groq import Groq
-import streamlit as st
-
-# قراءة المفتاح بأمان من إعدادات Streamlit
+# قراءة مفتاح الأمان من إعدادات سحابة ستريملت بدقة
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
-pdf_files = st.file_uploader("اختر ملفات الـ PDF", type=["pdf"], accept_multiple_files=True)
+st.title("مكتبتي الذكية للكتب 📚")
 
-extracted_texts = {}
-if pdf_files:
-    for pdf in pdf_files:
-        reader = PdfReader(pdf)
-        text = ""
-        for page in reader.pages:
-            text += page.extract_text() or ""
-        extracted_texts[pdf.name] = text
-    st.success("✨ تم قراءة الملفات واستخراج النصوص بنجاح!")
-
-question = st.text_input("اكتب سؤالك حول الكتاب هنا:", key="user_question")
-
-if question and extracted_texts:
-    context = "\n".join(extracted_texts.values())
-    
-    client = Groq(api_key=st.secrets["GROQ_API_KEY"])
-    
-    with st.spinner("🔍 جاري البحث في الكتاب وصياغة الإجابة..."):
-        chat_completion = client.chat.completions.create(
-            messages=[
-                {
-                    "role": "user",
-                    "content": f"بناءً على النصوص التالية المستخرجة من الكتاب:\n{context}\n\nأجب بدقة عن السؤال التالي: {question}"
-                }
-            ],
-            model="openai/gpt-oss-120b"
-        )
-        st.markdown("### 🤖 إجابة المساعد الذكي:")
-        st.write(chat_completion.choices[0].message.content)
-import streamlit as st
-from pypdf import PdfReader
-
-# دالة لقراءة واستخراج النصوص من ملفات الـ PDF بسرعة
+# دالة قراءة ملف الـ PDF بسرعة فائقة جداً مع التخزين المؤقت
 @st.cache_data
 def extract_text_from_pdf(uploaded_file):
-    reader = PdfReader(uploaded_file)
+    bytes_data = uploaded_file.read()
+    doc = fitz.open(stream=bytes_data, filetype="pdf")
     text = ""
-    for page in reader.pages:
-        page_text = page.extract_text()
-        if page_text:
-            text += page_text + "\n"
+    for page in doc:
+        text += page.get_text() + "\n"
     return text
+
+# صندوق لرفع ملف الـ PDF
+uploaded_file = st.file_uploader("اختر ملف PDF للكتاب هنا", type=["pdf"])
+
+if uploaded_file is not None:
+    with st.spinner("⏳ جاري قراءة وتحليل الكتاب بسرعة..."):
+        book_text = extract_text_from_pdf(uploaded_file)
+    
+    st.success("✨ تم قراءة الملفات واستخراج النصوص بنجاح!")
+    
+    # مربع كتابة السؤال حول الكتاب
+    user_question = st.text_input("اكتب سؤالك حول الكتاب هنا:")
+    
+    if user_question:
+        with st.spinner("🤖 جاري صياغة الإجابة..."):
+            response = client.chat.completions.create(
+                model="llama3-70b-8192",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": f"أنت مساعد ذكي. أجب عن سؤال المستخدم بناءً على النصوص المستخرجة التالية من الكتاب فقط:\n\n{book_text[:15000]}"
+                    },
+                    {
+                        "role": "user", 
+                        "content": user_question
+                    }
+                ]
+            )
+            st.write(response.choices[0].message.content)
